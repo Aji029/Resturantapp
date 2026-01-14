@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Mail, Lock, Loader2, ArrowRight } from 'lucide-react';
+import { Mail, Lock, Loader2, LogIn } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 interface LoginFormProps {
@@ -22,51 +22,63 @@ export default function LoginForm({ onSuccess, onSignupClick, onRestaurantClick 
     setError('');
 
     try {
+      console.log('Starting customer login process...');
+
       const { data, error: signInError } = await supabase.auth.signInWithPassword({
         email: formData.email,
         password: formData.password,
       });
 
       if (signInError) {
+        console.error('Login error:', signInError);
         if (signInError.message.includes('Invalid login credentials')) {
           setError('Ungültige E-Mail oder Passwort.');
         } else {
-          setError(signInError.message || 'Anmeldefehler aufgetreten.');
+          setError(`Anmeldung fehlgeschlagen: ${signInError.message}`);
         }
         setLoading(false);
         return;
       }
 
-      if (data.user) {
-        // Check if customer record exists
-        const { data: customer, error: customerError } = await supabase
-          .from('customers')
+      if (!data.user) {
+        setError('Anmeldung fehlgeschlagen.');
+        setLoading(false);
+        return;
+      }
+
+      console.log('User authenticated:', data.user.id);
+
+      const { data: customer, error: customerError } = await supabase
+        .from('customers')
+        .select('id')
+        .eq('user_id', data.user.id)
+        .maybeSingle();
+
+      if (customerError) {
+        console.error('Error checking customer:', customerError);
+      }
+
+      if (!customer) {
+        const { data: restaurant } = await supabase
+          .from('restaurants')
           .select('id')
-          .eq('user_id', data.user.id)
+          .eq('auth_id', data.user.id)
           .maybeSingle();
 
-        // If no customer record exists but user is not a restaurant, create one
-        if (!customer && !customerError) {
-          const { data: restaurant } = await supabase
-            .from('restaurants')
-            .select('id')
-            .eq('auth_id', data.user.id)
-            .maybeSingle();
-
-          // Only create customer if user is not a restaurant owner
-          if (!restaurant) {
-            setError('Kein Kundenkonto gefunden. Bitte registrieren Sie sich zuerst.');
-            await supabase.auth.signOut();
-            setLoading(false);
-            return;
-          }
+        if (!restaurant) {
+          console.error('No customer or restaurant record found');
+          setError('Kein Kundenkonto gefunden. Bitte registrieren Sie sich zuerst.');
+          await supabase.auth.signOut();
+          setLoading(false);
+          return;
         }
-
-        await onSuccess();
       }
+
+      console.log('Customer login successful!');
+      await onSuccess();
     } catch (err) {
-      console.error('Login error:', err);
-      setError('Ein unerwarteter Fehler ist aufgetreten.');
+      console.error('Unexpected login error:', err);
+      setError('Ein unerwarteter Fehler ist aufgetreten. Bitte versuchen Sie es erneut.');
       setLoading(false);
     }
   };
@@ -76,19 +88,7 @@ export default function LoginForm({ onSuccess, onSignupClick, onRestaurantClick 
       <div className="w-full max-w-md">
         <div className="text-center mb-8 animate-fade-in">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl mb-4 shadow-lg">
-            <svg
-              className="w-8 h-8 text-white"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
+            <LogIn className="w-8 h-8 text-white" />
           </div>
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
             Willkommen zurück!
@@ -154,13 +154,10 @@ export default function LoginForm({ onSuccess, onSignupClick, onRestaurantClick 
               {loading ? (
                 <>
                   <Loader2 className="animate-spin mr-2 h-5 w-5" />
-                  Wird angemeldet...
+                  Anmeldung läuft...
                 </>
               ) : (
-                <>
-                  Anmelden
-                  <ArrowRight className="ml-2 h-5 w-5" />
-                </>
+                'Anmelden'
               )}
             </button>
           </form>

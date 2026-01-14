@@ -30,6 +30,8 @@ export default function RestaurantLogin({ onSuccess, onSignupClick, onCustomerLo
     setIsLoading(true);
 
     try {
+      console.log('Starting restaurant login process...');
+
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email: formData.email,
         password: formData.password,
@@ -37,6 +39,8 @@ export default function RestaurantLogin({ onSuccess, onSignupClick, onCustomerLo
 
       if (authError) throw authError;
       if (!authData.user) throw new Error('Login fehlgeschlagen');
+
+      console.log('Restaurant user authenticated:', authData.user.id);
 
       const { data: restaurant, error: restaurantError } = await supabase
         .from('restaurants')
@@ -47,14 +51,16 @@ export default function RestaurantLogin({ onSuccess, onSignupClick, onCustomerLo
       if (restaurantError) throw restaurantError;
 
       if (!restaurant) {
+        console.error('No restaurant record found');
         await supabase.auth.signOut();
         throw new Error('Kein Restaurant-Konto gefunden. Bitte registrieren Sie sich zuerst.');
       }
 
+      console.log('Restaurant login successful!');
       onSuccess();
 
     } catch (err: any) {
-      console.error('Login error:', err);
+      console.error('Restaurant login error:', err);
       if (err.message.includes('Invalid login credentials')) {
         setError('Ungültige E-Mail oder Passwort');
       } else {

@@ -30,38 +30,49 @@ export default function SignupForm({ onSuccess, onLoginClick, onRestaurantClick 
   const [error, setError] = useState('');
 
   useEffect(() => {
-    const fetchRestaurants = async () => {
+    fetchRestaurants();
+  }, []);
+
+  const fetchRestaurants = async () => {
+    try {
       const { data, error } = await supabase
         .from('restaurants')
         .select('id, name, slug, location')
         .eq('is_active', true)
         .order('name');
 
-      if (data && !error) {
+      if (error) {
+        console.error('Error fetching restaurants:', error);
+        setError('Restaurants konnten nicht geladen werden.');
+        setLoadingRestaurants(false);
+        return;
+      }
+
+      if (data && data.length > 0) {
         setRestaurants(data);
 
         const urlParams = new URLSearchParams(window.location.search);
         const restaurantSlug = urlParams.get('restaurant');
 
         if (restaurantSlug) {
-          const preSelectedRestaurant = data.find(
-            (r) => r.slug === restaurantSlug
-          );
+          const preSelectedRestaurant = data.find((r) => r.slug === restaurantSlug);
           if (preSelectedRestaurant) {
-            setFormData((prev) => ({
-              ...prev,
-              restaurantId: preSelectedRestaurant.id,
-            }));
+            setFormData((prev) => ({ ...prev, restaurantId: preSelectedRestaurant.id }));
+          } else {
+            setFormData((prev) => ({ ...prev, restaurantId: data[0].id }));
           }
-        } else if (data.length > 0) {
+        } else {
           setFormData((prev) => ({ ...prev, restaurantId: data[0].id }));
         }
       }
-      setLoadingRestaurants(false);
-    };
 
-    fetchRestaurants();
-  }, []);
+      setLoadingRestaurants(false);
+    } catch (err) {
+      console.error('Unexpected error fetching restaurants:', err);
+      setError('Ein Fehler ist aufgetreten.');
+      setLoadingRestaurants(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -69,7 +80,8 @@ export default function SignupForm({ onSuccess, onLoginClick, onRestaurantClick 
     setError('');
 
     try {
-      // Create auth user with email and password
+      console.log('Starting signup process...');
+
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
@@ -82,10 +94,11 @@ export default function SignupForm({ onSuccess, onLoginClick, onRestaurantClick 
       });
 
       if (authError) {
+        console.error('Auth error:', authError);
         if (authError.message.includes('already registered') || authError.message.includes('User already registered')) {
-          setError('Diese E-Mail ist bereits registriert! Bitte melden Sie sich an.');
+          setError('Diese E-Mail ist bereits registriert! Bitte verwenden Sie die Anmeldung.');
         } else {
-          setError(authError.message || 'Authentifizierungsfehler aufgetreten.');
+          setError(`Registrierung fehlgeschlagen: ${authError.message}`);
         }
         setLoading(false);
         return;
@@ -97,10 +110,11 @@ export default function SignupForm({ onSuccess, onLoginClick, onRestaurantClick 
         return;
       }
 
-      // Generate redemption code for customer
+      console.log('Auth user created:', authData.user.id);
+
       const redemptionCode = Math.random().toString(36).substring(2, 10).toUpperCase();
 
-      // Insert customer with user_id
+      console.log('Creating customer record...');
       const { data: customer, error: customerError } = await supabase
         .from('customers')
         .insert([
@@ -119,41 +133,40 @@ export default function SignupForm({ onSuccess, onLoginClick, onRestaurantClick 
       if (customerError) {
         console.error('Customer insert error:', customerError);
         await supabase.auth.signOut();
-        setError(`Kundendaten konnten nicht gespeichert werden: ${customerError.message}`);
+        setError(`Kundenkonto konnte nicht erstellt werden: ${customerError.message}`);
         setLoading(false);
         return;
       }
 
       if (!customer) {
+        console.error('Customer record not returned');
         await supabase.auth.signOut();
-        setError('Kundendaten konnten nicht erstellt werden.');
+        setError('Kundenkonto konnte nicht erstellt werden.');
         setLoading(false);
         return;
       }
 
-      // Generate coupon code
+      console.log('Customer created:', customer.id);
+
       const couponCode = generateCouponCode();
       const expiryDate = getExpiryDate(30);
 
-      // Insert coupon
+      console.log('Creating welcome coupon...');
       const { error: couponError } = await supabase.from('coupons').insert([
         {
           code: couponCode,
           discount_type: 'percentage',
           discount_value: 15,
           expires_at: expiryDate.toISOString(),
-          customer_id: customer?.id,
+          customer_id: customer.id,
           restaurant_id: formData.restaurantId,
         },
       ]);
 
       if (couponError) {
-        setError('Gutschein konnte nicht erstellt werden. Bitte kontaktieren Sie den Support.');
-        setLoading(false);
-        return;
+        console.error('Coupon creation error:', couponError);
       }
 
-      // Create stamp card for customer
       const { data: stampProgram } = await supabase
         .from('stamp_programs')
         .select('id')
@@ -161,7 +174,8 @@ export default function SignupForm({ onSuccess, onLoginClick, onRestaurantClick 
         .eq('is_active', true)
         .maybeSingle();
 
-      if (stampProgram && customer?.id) {
+      if (stampProgram) {
+        console.log('Creating stamp card...');
         await supabase.from('stamp_cards').insert([
           {
             customer_id: customer.id,
@@ -173,10 +187,11 @@ export default function SignupForm({ onSuccess, onLoginClick, onRestaurantClick 
         ]);
       }
 
-      // Success
+      console.log('Signup completed successfully!');
       onSuccess(couponCode, formData.name);
     } catch (err) {
-      setError('Ein unerwarteter Fehler ist aufgetreten.');
+      console.error('Unexpected error during signup:', err);
+      setError('Ein unerwarteter Fehler ist aufgetreten. Bitte versuchen Sie es erneut.');
       setLoading(false);
     }
   };
@@ -184,7 +199,6 @@ export default function SignupForm({ onSuccess, onLoginClick, onRestaurantClick 
   return (
     <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-teal-50 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-        {/* Header */}
         <div className="text-center mb-8 animate-fade-in">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl mb-4 shadow-lg">
             <svg
@@ -205,14 +219,12 @@ export default function SignupForm({ onSuccess, onLoginClick, onRestaurantClick 
             Willkommen!
           </h1>
           <p className="text-gray-600">
-            Jetzt anmelden und <span className="font-semibold text-emerald-600">15% Rabatt</span> bei Ihrem nächsten Besuch erhalten
+            Jetzt registrieren und <span className="font-semibold text-emerald-600">15% Rabatt</span> bei Ihrem nächsten Besuch erhalten
           </p>
         </div>
 
-        {/* Form Card */}
         <div className="bg-white rounded-3xl shadow-xl p-8 animate-slide-up">
           <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Restaurant Dropdown */}
             <div>
               <label htmlFor="restaurant" className="block text-sm font-medium text-gray-700 mb-2">
                 Restaurant
@@ -263,7 +275,6 @@ export default function SignupForm({ onSuccess, onLoginClick, onRestaurantClick 
               </p>
             </div>
 
-            {/* Name Input */}
             <div>
               <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
                 Vollständiger Name
@@ -284,7 +295,6 @@ export default function SignupForm({ onSuccess, onLoginClick, onRestaurantClick 
               </div>
             </div>
 
-            {/* Email Input */}
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
                 E-Mail-Adresse
@@ -305,7 +315,6 @@ export default function SignupForm({ onSuccess, onLoginClick, onRestaurantClick 
               </div>
             </div>
 
-            {/* Phone Input */}
             <div>
               <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-2">
                 Telefonnummer
@@ -326,7 +335,6 @@ export default function SignupForm({ onSuccess, onLoginClick, onRestaurantClick 
               </div>
             </div>
 
-            {/* Password Input */}
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
                 Passwort
@@ -351,14 +359,12 @@ export default function SignupForm({ onSuccess, onLoginClick, onRestaurantClick 
               </p>
             </div>
 
-            {/* Error Message */}
             {error && (
               <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-xl text-sm">
                 {error}
               </div>
             )}
 
-            {/* Submit Button */}
             <button
               type="submit"
               disabled={loading}
@@ -367,10 +373,10 @@ export default function SignupForm({ onSuccess, onLoginClick, onRestaurantClick 
               {loading ? (
                 <>
                   <Loader2 className="animate-spin mr-2 h-5 w-5" />
-                  Wird verarbeitet...
+                  Registrierung läuft...
                 </>
               ) : (
-                'Gutschein erhalten'
+                'Jetzt registrieren'
               )}
             </button>
           </form>
@@ -390,9 +396,8 @@ export default function SignupForm({ onSuccess, onLoginClick, onRestaurantClick 
             </div>
           )}
 
-          {/* Privacy Note */}
           <p className="text-center text-xs text-gray-500 mt-6">
-            Mit der Anmeldung stimmen Sie dem Erhalt von Werbeangeboten per E-Mail zu
+            Mit der Registrierung stimmen Sie dem Erhalt von Werbeangeboten per E-Mail zu
           </p>
         </div>
 
