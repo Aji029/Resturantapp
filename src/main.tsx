@@ -3,7 +3,9 @@ import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 
-console.log('[Main] Starting application...');
+console.log('[Main] ============================================');
+console.log('[Main] MODULE LOADED - All imports successful');
+console.log('[Main] ============================================');
 
 try {
   const rootElement = document.getElementById('root');

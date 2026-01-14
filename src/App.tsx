@@ -1,5 +1,15 @@
+console.log('[App] ============================================');
+console.log('[App] MODULE LOADING');
+console.log('[App] ============================================');
+
 import { useState, useEffect } from 'react';
+
+console.log('[App] React hooks imported');
+
 import { supabase } from './lib/supabase';
+
+console.log('[App] Supabase client imported');
+
 import SignupForm from './components/SignupForm';
 import LoginForm from './components/LoginForm';
 import CouponSuccess from './components/CouponSuccess';
@@ -8,12 +18,15 @@ import RestaurantSignup from './components/RestaurantSignup';
 import RestaurantLogin from './components/RestaurantLogin';
 import RestaurantDashboard from './components/RestaurantDashboard';
 
+console.log('[App] All components imported');
+
 type View = 'signup' | 'login' | 'success' | 'dashboard' | 'restaurant-signup' | 'restaurant-login' | 'restaurant-dashboard';
 
-console.log('[App] Module loaded');
+console.log('[App] ✓ Module loaded successfully');
+console.log('[App] ============================================');
 
 function App() {
-  console.log('[App] Component rendering...');
+  console.log('[App] 🚀 Component rendering...');
 
   const [currentView, setCurrentView] = useState<View>('signup');
   const [couponCode, setCouponCode] = useState('');
