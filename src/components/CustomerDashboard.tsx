@@ -60,11 +60,21 @@ export default function CustomerDashboard({ onLogout }: CustomerDashboardProps) 
         return;
       }
 
-      const { data: customer } = await supabase
+      const { data: customer, error: customerError } = await supabase
         .from('customers')
         .select('id, name, redemption_code')
         .eq('user_id', user.id)
         .maybeSingle();
+
+      if (customerError) {
+        console.error('Error fetching customer:', customerError);
+      }
+
+      if (!customer) {
+        console.error('No customer found for user:', user.id);
+        setLoading(false);
+        return;
+      }
 
       if (customer) {
         setCustomerName(customer.name);

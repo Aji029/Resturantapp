@@ -73,8 +73,22 @@ function App() {
     setCurrentView('success');
   };
 
-  const handleLoginSuccess = () => {
-    setCurrentView('dashboard');
+  const handleLoginSuccess = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+
+    if (session) {
+      const { data: restaurant } = await supabase
+        .from('restaurants')
+        .select('id')
+        .eq('auth_id', session.user.id)
+        .maybeSingle();
+
+      if (restaurant) {
+        setCurrentView('restaurant-dashboard');
+      } else {
+        setCurrentView('dashboard');
+      }
+    }
   };
 
   const handleLogout = () => {

@@ -3,7 +3,7 @@ import { Mail, Lock, Loader2, ArrowRight } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 interface LoginFormProps {
-  onSuccess: () => void;
+  onSuccess: () => void | Promise<void>;
   onSignupClick?: () => void;
   onRestaurantClick?: () => void;
 }
@@ -38,7 +38,7 @@ export default function LoginForm({ onSuccess, onSignupClick, onRestaurantClick 
       }
 
       if (data.user) {
-        onSuccess();
+        await onSuccess();
       }
     } catch (err) {
       setError('Ein unerwarteter Fehler ist aufgetreten.');
