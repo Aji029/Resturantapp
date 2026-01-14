@@ -263,57 +263,57 @@ export default function RestaurantDashboard({ onLogout }: RestaurantDashboardPro
 
     setAddingStamp(true);
     setStampError('');
+    setStampSuccess('');
 
     try {
-      const { data: activeCard } = await supabase
-        .from('stamp_cards')
-        .select('id, current_stamps, program_id, program:stamp_programs(stamps_required, restaurant_id)')
-        .eq('customer_id', selectedCustomer.id)
-        .eq('status', 'active')
-        .eq('program.restaurant_id', restaurant.id)
-        .maybeSingle();
-
-      if (!activeCard) {
-        setStampError('Keine aktive Stempelkarte gefunden');
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setStampError('Nicht authentifiziert');
         setAddingStamp(false);
         return;
       }
 
-      const { error: stampError } = await supabase
-        .from('stamps')
-        .insert({
-          card_id: activeCard.id,
-          customer_id: selectedCustomer.id,
-          restaurant_id: restaurant.id,
-          added_by_email: restaurant.email,
-          notes: stampNote,
-        });
+      const { data, error } = await supabase.rpc('add_stamp_to_customer', {
+        p_customer_id: selectedCustomer.id,
+        p_restaurant_auth_id: user.id,
+        p_notes: stampNote || null,
+      });
 
-      if (stampError) throw stampError;
+      if (error) {
+        console.error('Error calling add_stamp_to_customer:', error);
+        setStampError('Fehler beim Hinzufügen des Stempels');
+        setAddingStamp(false);
+        return;
+      }
 
-      const newStampCount = activeCard.current_stamps + 1;
-      const { error: updateError } = await supabase
-        .from('stamp_cards')
-        .update({
-          current_stamps: newStampCount,
-          total_stamps_earned: newStampCount,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', activeCard.id);
+      const result = data;
 
-      if (updateError) throw updateError;
+      if (!result.success) {
+        setStampError(result.error || 'Fehler beim Hinzufügen des Stempels');
+        setAddingStamp(false);
+        return;
+      }
 
-      setStampSuccess(`Stempel erfolgreich hinzugefügt! ${selectedCustomer.name} hat jetzt ${newStampCount} Stempel.`);
+      if (result.reward_issued) {
+        setStampSuccess(
+          `🎉 ${result.message}\n` +
+          `Gutschein-Code: ${result.coupon_code}\n` +
+          `Belohnung: ${result.reward_value}`
+        );
+      } else {
+        setStampSuccess(result.message);
+      }
+
       setSelectedCustomer(null);
       setCustomerIdInput('');
       setStampNote('');
 
       await loadRestaurantData();
 
-      setTimeout(() => setStampSuccess(''), 3000);
+      setTimeout(() => setStampSuccess(''), 5000);
     } catch (err) {
-      console.error('Error adding stamp:', err);
-      setStampError('Fehler beim Hinzufügen des Stempels');
+      console.error('Unexpected error adding stamp:', err);
+      setStampError('Ein unerwarteter Fehler ist aufgetreten');
     } finally {
       setAddingStamp(false);
     }

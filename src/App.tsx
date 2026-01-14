@@ -58,81 +58,102 @@ function App() {
   }, []);
 
   const checkAuthAndRoute = async () => {
-    const params = new URLSearchParams(window.location.search);
-    const view = params.get('view');
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const view = params.get('view');
 
-    if (view === 'restaurant-signup') {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        const { data: restaurant } = await supabase
-          .from('restaurants')
-          .select('id')
-          .eq('auth_id', session.user.id)
-          .maybeSingle();
+      if (view === 'restaurant-signup') {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          const { data: restaurant } = await supabase
+            .from('restaurants')
+            .select('id')
+            .eq('auth_id', session.user.id)
+            .maybeSingle();
 
-        if (!restaurant) {
-          await supabase.auth.signOut();
+          if (!restaurant) {
+            await supabase.auth.signOut();
+          }
         }
+        setCurrentView('restaurant-signup');
+        setIsCheckingAuth(false);
+        return;
       }
-      setCurrentView('restaurant-signup');
-      setIsCheckingAuth(false);
-      return;
-    }
 
-    if (view === 'restaurant-login') {
-      const { data: { session } } = await supabase.auth.getSession();
+      if (view === 'restaurant-login') {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          const { data: restaurant } = await supabase
+            .from('restaurants')
+            .select('id')
+            .eq('auth_id', session.user.id)
+            .maybeSingle();
+
+          if (restaurant) {
+            setCurrentView('restaurant-dashboard');
+            setIsCheckingAuth(false);
+            return;
+          } else {
+            await supabase.auth.signOut();
+          }
+        }
+        setCurrentView('restaurant-login');
+        setIsCheckingAuth(false);
+        return;
+      }
+
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+      if (sessionError) {
+        console.error('Session error:', sessionError);
+        setCurrentView(view === 'login' ? 'login' : 'signup');
+        setIsCheckingAuth(false);
+        return;
+      }
+
       if (session) {
-        const { data: restaurant } = await supabase
+        const { data: restaurant, error: restaurantError } = await supabase
           .from('restaurants')
           .select('id')
           .eq('auth_id', session.user.id)
           .maybeSingle();
+
+        if (restaurantError) {
+          console.error('Restaurant lookup error:', restaurantError);
+        }
 
         if (restaurant) {
           setCurrentView('restaurant-dashboard');
-          setIsCheckingAuth(false);
-          return;
         } else {
-          await supabase.auth.signOut();
+          const { data: customer, error: customerError } = await supabase
+            .from('customers')
+            .select('id')
+            .eq('user_id', session.user.id)
+            .maybeSingle();
+
+          if (customerError) {
+            console.error('Customer lookup error:', customerError);
+            await supabase.auth.signOut();
+            setCurrentView('login');
+          } else if (customer) {
+            setCurrentView('dashboard');
+          } else {
+            console.warn('No customer or restaurant found for authenticated user');
+            await supabase.auth.signOut();
+            setCurrentView('login');
+          }
         }
-      }
-      setCurrentView('restaurant-login');
-      setIsCheckingAuth(false);
-      return;
-    }
-
-    const { data: { session } } = await supabase.auth.getSession();
-
-    if (session) {
-      const { data: restaurant } = await supabase
-        .from('restaurants')
-        .select('id')
-        .eq('auth_id', session.user.id)
-        .maybeSingle();
-
-      if (restaurant) {
-        setCurrentView('restaurant-dashboard');
+      } else if (view === 'login') {
+        setCurrentView('login');
       } else {
-        const { data: customer } = await supabase
-          .from('customers')
-          .select('id')
-          .eq('user_id', session.user.id)
-          .maybeSingle();
-
-        if (customer) {
-          setCurrentView('dashboard');
-        } else {
-          await supabase.auth.signOut();
-          setCurrentView('login');
-        }
+        setCurrentView('signup');
       }
-    } else if (view === 'login') {
-      setCurrentView('login');
-    } else {
+    } catch (error) {
+      console.error('Unexpected error in checkAuthAndRoute:', error);
       setCurrentView('signup');
+    } finally {
+      setIsCheckingAuth(false);
     }
-
-    setIsCheckingAuth(false);
   };
 
   const handleSignupSuccess = (code: string, name: string) => {
