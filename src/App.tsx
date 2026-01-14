@@ -28,7 +28,9 @@ function App() {
           .maybeSingle();
 
         if (restaurant) {
-          setCurrentView('restaurant-dashboard');
+          if (currentView !== 'restaurant-dashboard') {
+            setCurrentView('restaurant-dashboard');
+          }
         } else {
           const { data: customer } = await supabase
             .from('customers')
@@ -36,7 +38,7 @@ function App() {
             .eq('user_id', session.user.id)
             .maybeSingle();
 
-          if (customer) {
+          if (customer && currentView !== 'dashboard' && currentView !== 'restaurant-dashboard' && currentView !== 'restaurant-login' && currentView !== 'restaurant-signup') {
             setCurrentView('dashboard');
           }
         }
@@ -51,12 +53,40 @@ function App() {
     const view = params.get('view');
 
     if (view === 'restaurant-signup') {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        const { data: restaurant } = await supabase
+          .from('restaurants')
+          .select('id')
+          .eq('auth_id', session.user.id)
+          .maybeSingle();
+
+        if (!restaurant) {
+          await supabase.auth.signOut();
+        }
+      }
       setCurrentView('restaurant-signup');
       setIsCheckingAuth(false);
       return;
     }
 
     if (view === 'restaurant-login') {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        const { data: restaurant } = await supabase
+          .from('restaurants')
+          .select('id')
+          .eq('auth_id', session.user.id)
+          .maybeSingle();
+
+        if (restaurant) {
+          setCurrentView('restaurant-dashboard');
+          setIsCheckingAuth(false);
+          return;
+        } else {
+          await supabase.auth.signOut();
+        }
+      }
       setCurrentView('restaurant-login');
       setIsCheckingAuth(false);
       return;
@@ -74,7 +104,18 @@ function App() {
       if (restaurant) {
         setCurrentView('restaurant-dashboard');
       } else {
-        setCurrentView('dashboard');
+        const { data: customer } = await supabase
+          .from('customers')
+          .select('id')
+          .eq('user_id', session.user.id)
+          .maybeSingle();
+
+        if (customer) {
+          setCurrentView('dashboard');
+        } else {
+          await supabase.auth.signOut();
+          setCurrentView('login');
+        }
       }
     } else if (view === 'login') {
       setCurrentView('login');
