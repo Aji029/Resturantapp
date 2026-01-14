@@ -69,12 +69,15 @@ export default function CustomerDashboard({ onLogout }: CustomerDashboardProps) 
 
       if (customerError) {
         console.error('Error fetching customer:', customerError);
+        await supabase.auth.signOut();
+        onLogout();
+        return;
       }
 
       if (!customer) {
         console.error('No customer found for user:', user.id);
-        setError('Kundenkonto nicht gefunden. Bitte melden Sie sich ab und registrieren Sie sich erneut.');
-        setLoading(false);
+        await supabase.auth.signOut();
+        onLogout();
         return;
       }
 

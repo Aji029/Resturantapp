@@ -19,9 +19,27 @@ function App() {
   useEffect(() => {
     checkAuthAndRoute();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session) {
-        setCurrentView('dashboard');
+        const { data: restaurant } = await supabase
+          .from('restaurants')
+          .select('id')
+          .eq('auth_id', session.user.id)
+          .maybeSingle();
+
+        if (restaurant) {
+          setCurrentView('restaurant-dashboard');
+        } else {
+          const { data: customer } = await supabase
+            .from('customers')
+            .select('id')
+            .eq('user_id', session.user.id)
+            .maybeSingle();
+
+          if (customer) {
+            setCurrentView('dashboard');
+          }
+        }
       }
     });
 
@@ -86,7 +104,18 @@ function App() {
       if (restaurant) {
         setCurrentView('restaurant-dashboard');
       } else {
-        setCurrentView('dashboard');
+        const { data: customer } = await supabase
+          .from('customers')
+          .select('id')
+          .eq('user_id', session.user.id)
+          .maybeSingle();
+
+        if (customer) {
+          setCurrentView('dashboard');
+        } else {
+          await supabase.auth.signOut();
+          setCurrentView('login');
+        }
       }
     }
   };
@@ -111,12 +140,42 @@ function App() {
     setCurrentView('restaurant-login');
   };
 
-  const handleRestaurantSignupSuccess = () => {
-    setCurrentView('restaurant-dashboard');
+  const handleRestaurantSignupSuccess = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+
+    if (session) {
+      const { data: restaurant } = await supabase
+        .from('restaurants')
+        .select('id')
+        .eq('auth_id', session.user.id)
+        .maybeSingle();
+
+      if (restaurant) {
+        setCurrentView('restaurant-dashboard');
+      } else {
+        await supabase.auth.signOut();
+        setCurrentView('restaurant-signup');
+      }
+    }
   };
 
-  const handleRestaurantLoginSuccess = () => {
-    setCurrentView('restaurant-dashboard');
+  const handleRestaurantLoginSuccess = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+
+    if (session) {
+      const { data: restaurant } = await supabase
+        .from('restaurants')
+        .select('id')
+        .eq('auth_id', session.user.id)
+        .maybeSingle();
+
+      if (restaurant) {
+        setCurrentView('restaurant-dashboard');
+      } else {
+        await supabase.auth.signOut();
+        setCurrentView('restaurant-login');
+      }
+    }
   };
 
   const handleRestaurantLogout = () => {

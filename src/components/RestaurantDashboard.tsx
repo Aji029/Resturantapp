@@ -83,6 +83,7 @@ export default function RestaurantDashboard({ onLogout }: RestaurantDashboardPro
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
+        await supabase.auth.signOut();
         onLogout();
         return;
       }
@@ -91,9 +92,22 @@ export default function RestaurantDashboard({ onLogout }: RestaurantDashboardPro
         .from('restaurants')
         .select('*')
         .eq('auth_id', user.id)
-        .single();
+        .maybeSingle();
 
-      if (restaurantError) throw restaurantError;
+      if (restaurantError) {
+        console.error('Error loading restaurant:', restaurantError);
+        await supabase.auth.signOut();
+        onLogout();
+        return;
+      }
+
+      if (!restaurantData) {
+        console.error('No restaurant found for this user - access denied');
+        await supabase.auth.signOut();
+        onLogout();
+        return;
+      }
+
       setRestaurant(restaurantData);
 
       const { data: customersData, error: customersError } = await supabase
