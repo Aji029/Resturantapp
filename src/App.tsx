@@ -58,11 +58,21 @@ function App() {
   }, []);
 
   const checkAuthAndRoute = async () => {
+    console.log('[App] Starting auth check...');
+
+    const timeoutId = setTimeout(() => {
+      console.warn('[App] Auth check taking too long, forcing completion');
+      setIsCheckingAuth(false);
+      setCurrentView('signup');
+    }, 5000);
+
     try {
       const params = new URLSearchParams(window.location.search);
       const view = params.get('view');
+      console.log('[App] URL view param:', view);
 
       if (view === 'restaurant-signup') {
+        console.log('[App] Restaurant signup view requested');
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
           const { data: restaurant } = await supabase
@@ -75,12 +85,14 @@ function App() {
             await supabase.auth.signOut();
           }
         }
+        clearTimeout(timeoutId);
         setCurrentView('restaurant-signup');
         setIsCheckingAuth(false);
         return;
       }
 
       if (view === 'restaurant-login') {
+        console.log('[App] Restaurant login view requested');
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
           const { data: restaurant } = await supabase
@@ -90,6 +102,7 @@ function App() {
             .maybeSingle();
 
           if (restaurant) {
+            clearTimeout(timeoutId);
             setCurrentView('restaurant-dashboard');
             setIsCheckingAuth(false);
             return;
@@ -97,21 +110,25 @@ function App() {
             await supabase.auth.signOut();
           }
         }
+        clearTimeout(timeoutId);
         setCurrentView('restaurant-login');
         setIsCheckingAuth(false);
         return;
       }
 
+      console.log('[App] Checking session...');
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
       if (sessionError) {
-        console.error('Session error:', sessionError);
+        console.error('[App] Session error:', sessionError);
+        clearTimeout(timeoutId);
         setCurrentView(view === 'login' ? 'login' : 'signup');
         setIsCheckingAuth(false);
         return;
       }
 
       if (session) {
+        console.log('[App] Session found, checking user type...');
         const { data: restaurant, error: restaurantError } = await supabase
           .from('restaurants')
           .select('id')
@@ -119,12 +136,15 @@ function App() {
           .maybeSingle();
 
         if (restaurantError) {
-          console.error('Restaurant lookup error:', restaurantError);
+          console.error('[App] Restaurant lookup error:', restaurantError);
         }
 
         if (restaurant) {
+          console.log('[App] Restaurant found, routing to dashboard');
+          clearTimeout(timeoutId);
           setCurrentView('restaurant-dashboard');
         } else {
+          console.log('[App] Not a restaurant, checking for customer...');
           const { data: customer, error: customerError } = await supabase
             .from('customers')
             .select('id')
@@ -132,26 +152,37 @@ function App() {
             .maybeSingle();
 
           if (customerError) {
-            console.error('Customer lookup error:', customerError);
+            console.error('[App] Customer lookup error:', customerError);
             await supabase.auth.signOut();
+            clearTimeout(timeoutId);
             setCurrentView('login');
           } else if (customer) {
+            console.log('[App] Customer found, routing to dashboard');
+            clearTimeout(timeoutId);
             setCurrentView('dashboard');
           } else {
-            console.warn('No customer or restaurant found for authenticated user');
+            console.warn('[App] No customer or restaurant found for authenticated user');
             await supabase.auth.signOut();
+            clearTimeout(timeoutId);
             setCurrentView('login');
           }
         }
-      } else if (view === 'login') {
-        setCurrentView('login');
       } else {
-        setCurrentView('signup');
+        console.log('[App] No session, routing to', view === 'login' ? 'login' : 'signup');
+        clearTimeout(timeoutId);
+        if (view === 'login') {
+          setCurrentView('login');
+        } else {
+          setCurrentView('signup');
+        }
       }
     } catch (error) {
-      console.error('Unexpected error in checkAuthAndRoute:', error);
+      console.error('[App] Unexpected error in checkAuthAndRoute:', error);
+      clearTimeout(timeoutId);
       setCurrentView('signup');
     } finally {
+      console.log('[App] Auth check complete');
+      clearTimeout(timeoutId);
       setIsCheckingAuth(false);
     }
   };
