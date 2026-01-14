@@ -19,8 +19,8 @@ function App() {
   useEffect(() => {
     checkAuthAndRoute();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (session) {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session) {
         const { data: restaurant } = await supabase
           .from('restaurants')
           .select('id')
@@ -28,9 +28,7 @@ function App() {
           .maybeSingle();
 
         if (restaurant) {
-          if (currentView !== 'restaurant-dashboard') {
-            setCurrentView('restaurant-dashboard');
-          }
+          setCurrentView('restaurant-dashboard');
         } else {
           const { data: customer } = await supabase
             .from('customers')
@@ -38,9 +36,20 @@ function App() {
             .eq('user_id', session.user.id)
             .maybeSingle();
 
-          if (customer && currentView !== 'dashboard' && currentView !== 'restaurant-dashboard' && currentView !== 'restaurant-login' && currentView !== 'restaurant-signup') {
+          if (customer) {
             setCurrentView('dashboard');
           }
+        }
+      } else if (event === 'SIGNED_OUT') {
+        const params = new URLSearchParams(window.location.search);
+        const view = params.get('view');
+
+        if (view === 'restaurant-login' || view === 'restaurant-signup') {
+          setCurrentView(view as View);
+        } else if (view === 'login') {
+          setCurrentView('login');
+        } else {
+          setCurrentView('signup');
         }
       }
     });
