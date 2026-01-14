@@ -89,6 +89,7 @@ export default function SignupForm({ onSuccess, onLoginClick, onRestaurantClick 
           data: {
             name: formData.name,
             phone: formData.phone,
+            restaurant_id: formData.restaurantId,
           },
         },
       });
@@ -112,41 +113,32 @@ export default function SignupForm({ onSuccess, onLoginClick, onRestaurantClick 
 
       console.log('Auth user created:', authData.user.id);
 
-      const redemptionCode = Math.random().toString(36).substring(2, 10).toUpperCase();
+      console.log('Verifying customer record was auto-created...');
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
-      console.log('Creating customer record...');
       const { data: customer, error: customerError } = await supabase
         .from('customers')
-        .insert([
-          {
-            name: formData.name,
-            email: formData.email,
-            phone: formData.phone,
-            restaurant_id: formData.restaurantId,
-            user_id: authData.user.id,
-            redemption_code: redemptionCode,
-          },
-        ])
-        .select()
+        .select('id, redemption_code')
+        .eq('user_id', authData.user.id)
         .maybeSingle();
 
       if (customerError) {
-        console.error('Customer insert error:', customerError);
+        console.error('Error checking customer record:', customerError);
         await supabase.auth.signOut();
-        setError(`Kundenkonto konnte nicht erstellt werden: ${customerError.message}`);
+        setError('Fehler beim Erstellen des Kundenkontos. Bitte versuchen Sie es erneut.');
         setLoading(false);
         return;
       }
 
       if (!customer) {
-        console.error('Customer record not returned');
+        console.error('Customer record was not auto-created by trigger');
         await supabase.auth.signOut();
-        setError('Kundenkonto konnte nicht erstellt werden.');
+        setError('Kundenkonto konnte nicht erstellt werden. Bitte kontaktieren Sie den Support.');
         setLoading(false);
         return;
       }
 
-      console.log('Customer created:', customer.id);
+      console.log('Customer record verified:', customer.id);
 
       const couponCode = generateCouponCode();
       const expiryDate = getExpiryDate(30);

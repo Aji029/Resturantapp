@@ -51,6 +51,18 @@ export default function RestaurantLogin({ onSuccess, onSignupClick, onCustomerLo
       if (restaurantError) throw restaurantError;
 
       if (!restaurant) {
+        const { data: customer } = await supabase
+          .from('customers')
+          .select('id, name')
+          .eq('user_id', authData.user.id)
+          .maybeSingle();
+
+        if (customer) {
+          console.error('User is a customer, not a restaurant');
+          await supabase.auth.signOut();
+          throw new Error('Dieses Konto ist ein Kunden-Konto. Bitte verwenden Sie das Kunden-Portal zur Anmeldung.');
+        }
+
         console.error('No restaurant record found');
         await supabase.auth.signOut();
         throw new Error('Kein Restaurant-Konto gefunden. Bitte registrieren Sie sich zuerst.');

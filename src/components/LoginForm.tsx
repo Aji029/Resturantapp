@@ -56,22 +56,32 @@ export default function LoginForm({ onSuccess, onSignupClick, onRestaurantClick 
 
       if (customerError) {
         console.error('Error checking customer:', customerError);
+        setError('Fehler beim Überprüfen des Kontos. Bitte versuchen Sie es erneut.');
+        await supabase.auth.signOut();
+        setLoading(false);
+        return;
       }
 
       if (!customer) {
         const { data: restaurant } = await supabase
           .from('restaurants')
-          .select('id')
+          .select('id, name')
           .eq('auth_id', data.user.id)
           .maybeSingle();
 
-        if (!restaurant) {
-          console.error('No customer or restaurant record found');
-          setError('Kein Kundenkonto gefunden. Bitte registrieren Sie sich zuerst.');
+        if (restaurant) {
+          console.error('User is a restaurant owner, not a customer');
+          setError('Dieses Konto ist ein Restaurant-Konto. Bitte verwenden Sie das Restaurant-Portal zur Anmeldung.');
           await supabase.auth.signOut();
           setLoading(false);
           return;
         }
+
+        console.error('No customer or restaurant record found');
+        setError('Kein Kundenkonto gefunden. Bitte registrieren Sie sich zuerst.');
+        await supabase.auth.signOut();
+        setLoading(false);
+        return;
       }
 
       console.log('Customer login successful!');
