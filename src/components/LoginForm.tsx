@@ -38,9 +38,34 @@ export default function LoginForm({ onSuccess, onSignupClick, onRestaurantClick 
       }
 
       if (data.user) {
+        // Check if customer record exists
+        const { data: customer, error: customerError } = await supabase
+          .from('customers')
+          .select('id')
+          .eq('user_id', data.user.id)
+          .maybeSingle();
+
+        // If no customer record exists but user is not a restaurant, create one
+        if (!customer && !customerError) {
+          const { data: restaurant } = await supabase
+            .from('restaurants')
+            .select('id')
+            .eq('auth_id', data.user.id)
+            .maybeSingle();
+
+          // Only create customer if user is not a restaurant owner
+          if (!restaurant) {
+            setError('Kein Kundenkonto gefunden. Bitte registrieren Sie sich zuerst.');
+            await supabase.auth.signOut();
+            setLoading(false);
+            return;
+          }
+        }
+
         await onSuccess();
       }
     } catch (err) {
+      console.error('Login error:', err);
       setError('Ein unerwarteter Fehler ist aufgetreten.');
       setLoading(false);
     }

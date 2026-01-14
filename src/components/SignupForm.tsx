@@ -82,8 +82,8 @@ export default function SignupForm({ onSuccess, onLoginClick, onRestaurantClick 
       });
 
       if (authError) {
-        if (authError.message.includes('already registered')) {
-          setError('Diese E-Mail ist bereits registriert!');
+        if (authError.message.includes('already registered') || authError.message.includes('User already registered')) {
+          setError('Diese E-Mail ist bereits registriert! Bitte melden Sie sich an.');
         } else {
           setError(authError.message || 'Authentifizierungsfehler aufgetreten.');
         }
@@ -97,6 +97,9 @@ export default function SignupForm({ onSuccess, onLoginClick, onRestaurantClick 
         return;
       }
 
+      // Generate redemption code for customer
+      const redemptionCode = Math.random().toString(36).substring(2, 10).toUpperCase();
+
       // Insert customer with user_id
       const { data: customer, error: customerError } = await supabase
         .from('customers')
@@ -107,13 +110,23 @@ export default function SignupForm({ onSuccess, onLoginClick, onRestaurantClick 
             phone: formData.phone,
             restaurant_id: formData.restaurantId,
             user_id: authData.user.id,
+            redemption_code: redemptionCode,
           },
         ])
         .select()
         .maybeSingle();
 
       if (customerError) {
-        setError('Kundendaten konnten nicht gespeichert werden.');
+        console.error('Customer insert error:', customerError);
+        await supabase.auth.signOut();
+        setError(`Kundendaten konnten nicht gespeichert werden: ${customerError.message}`);
+        setLoading(false);
+        return;
+      }
+
+      if (!customer) {
+        await supabase.auth.signOut();
+        setError('Kundendaten konnten nicht erstellt werden.');
         setLoading(false);
         return;
       }

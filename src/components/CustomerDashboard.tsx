@@ -46,6 +46,7 @@ export default function CustomerDashboard({ onLogout }: CustomerDashboardProps) 
   const [showQRCode, setShowQRCode] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     fetchCustomerData();
@@ -72,6 +73,7 @@ export default function CustomerDashboard({ onLogout }: CustomerDashboardProps) 
 
       if (!customer) {
         console.error('No customer found for user:', user.id);
+        setError('Kundenkonto nicht gefunden. Bitte melden Sie sich ab und registrieren Sie sich erneut.');
         setLoading(false);
         return;
       }
@@ -172,6 +174,26 @@ export default function CustomerDashboard({ onLogout }: CustomerDashboardProps) 
     return (
       <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-teal-50 flex items-center justify-center">
         <Loader2 className="w-8 h-8 text-emerald-600 animate-spin" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-teal-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-3xl shadow-xl p-8 max-w-md w-full">
+          <div className="text-center">
+            <div className="text-red-500 text-5xl mb-4">⚠️</div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Fehler</h2>
+            <p className="text-gray-600 mb-6">{error}</p>
+            <button
+              onClick={handleLogout}
+              className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 text-white py-3 rounded-xl font-semibold hover:from-emerald-600 hover:to-teal-700 transition-all duration-200"
+            >
+              Abmelden
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
