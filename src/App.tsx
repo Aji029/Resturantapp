@@ -10,16 +10,34 @@ import RestaurantDashboard from './components/RestaurantDashboard';
 
 type View = 'signup' | 'login' | 'success' | 'dashboard' | 'restaurant-signup' | 'restaurant-login' | 'restaurant-dashboard';
 
+console.log('[App] Module loaded');
+
 function App() {
+  console.log('[App] Component rendering...');
+
   const [currentView, setCurrentView] = useState<View>('signup');
   const [couponCode, setCouponCode] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
 
   useEffect(() => {
-    checkAuthAndRoute();
+    console.log('[App] useEffect mounting...');
+
+    let mounted = true;
+
+    const initApp = async () => {
+      if (mounted) {
+        await checkAuthAndRoute();
+      }
+    };
+
+    initApp();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('[App] Auth state changed:', event);
+
+      if (!mounted) return;
+
       if (event === 'SIGNED_IN' && session) {
         const { data: restaurant } = await supabase
           .from('restaurants')
@@ -54,7 +72,11 @@ function App() {
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      console.log('[App] useEffect cleanup');
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const checkAuthAndRoute = async () => {
@@ -287,7 +309,20 @@ function App() {
   if (isCheckingAuth) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-teal-50 flex items-center justify-center">
-        <div className="text-emerald-600">Loading...</div>
+        <div className="text-center">
+          <div className="text-emerald-600 text-lg mb-4">Loading...</div>
+          <button
+            onClick={() => {
+              console.log('[App] Force refresh clicked');
+              localStorage.clear();
+              sessionStorage.clear();
+              window.location.href = window.location.origin;
+            }}
+            className="text-sm text-gray-500 hover:text-gray-700 underline"
+          >
+            Taking too long? Click here to refresh
+          </button>
+        </div>
       </div>
     );
   }
