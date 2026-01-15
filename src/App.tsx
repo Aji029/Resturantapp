@@ -52,6 +52,7 @@ function App() {
       if (!mounted) return;
 
       if (event === 'SIGNED_IN' && session) {
+        console.log('[App] SIGNED_IN - checking user type...');
         const { data: restaurant } = await supabase
           .from('restaurants')
           .select('id')
@@ -59,7 +60,9 @@ function App() {
           .maybeSingle();
 
         if (restaurant) {
+          console.log('[App] Restaurant found, showing dashboard');
           setCurrentView('restaurant-dashboard');
+          setIsCheckingAuth(false);
         } else {
           const { data: customer } = await supabase
             .from('customers')
@@ -68,10 +71,16 @@ function App() {
             .maybeSingle();
 
           if (customer) {
+            console.log('[App] Customer found, showing dashboard');
             setCurrentView('dashboard');
+            setIsCheckingAuth(false);
+          } else {
+            console.log('[App] No customer or restaurant found');
+            setIsCheckingAuth(false);
           }
         }
       } else if (event === 'SIGNED_OUT') {
+        console.log('[App] SIGNED_OUT');
         const params = new URLSearchParams(window.location.search);
         const view = params.get('view');
 
@@ -82,6 +91,7 @@ function App() {
         } else {
           setCurrentView('signup');
         }
+        setIsCheckingAuth(false);
       }
     });
 
