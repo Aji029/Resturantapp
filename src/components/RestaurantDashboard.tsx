@@ -202,14 +202,20 @@ export default function RestaurantDashboard({ onLogout }: RestaurantDashboardPro
       const trimmedInput = customerIdInput.trim();
 
       if (/^\d{6}$/.test(trimmedInput)) {
+        console.log('[RestaurantDashboard] Looking up customer with code:', trimmedInput);
+        console.log('[RestaurantDashboard] Restaurant ID:', restaurant.id);
+
         const { data: customer, error } = await supabase
           .from('customers')
           .select('*')
           .eq('redemption_code', trimmedInput)
+          .eq('restaurant_id', restaurant.id)
           .maybeSingle();
 
+        console.log('[RestaurantDashboard] Customer lookup result:', customer, error);
+
         if (error || !customer) {
-          setStampError('Kunde mit diesem Code nicht gefunden');
+          setStampError('Kunde mit diesem Code nicht gefunden oder gehört nicht zu Ihrem Restaurant');
           return;
         }
 
