@@ -37,10 +37,11 @@ function App() {
     console.log('[App] useEffect mounting...');
 
     let mounted = true;
+    let authCheckTimeoutId: NodeJS.Timeout | null = null;
 
     const initApp = async () => {
       if (mounted) {
-        await checkAuthAndRoute();
+        authCheckTimeoutId = await checkAuthAndRoute();
       }
     };
 
@@ -50,6 +51,13 @@ function App() {
       console.log('[App] Auth state changed:', event);
 
       if (!mounted) return;
+
+      // Clear any pending auth check timeouts
+      if (authCheckTimeoutId) {
+        console.log('[App] Clearing auth check timeout due to auth state change');
+        clearTimeout(authCheckTimeoutId);
+        authCheckTimeoutId = null;
+      }
 
       if (event === 'SIGNED_IN' && session) {
         console.log('[App] SIGNED_IN - checking user type...');
@@ -98,11 +106,14 @@ function App() {
     return () => {
       console.log('[App] useEffect cleanup');
       mounted = false;
+      if (authCheckTimeoutId) {
+        clearTimeout(authCheckTimeoutId);
+      }
       subscription.unsubscribe();
     };
   }, []);
 
-  const checkAuthAndRoute = async () => {
+  const checkAuthAndRoute = async (): Promise<NodeJS.Timeout> => {
     console.log('[App] Starting auth check...');
 
     const timeoutId = setTimeout(() => {
@@ -230,6 +241,8 @@ function App() {
       clearTimeout(timeoutId);
       setIsCheckingAuth(false);
     }
+
+    return timeoutId;
   };
 
   const handleSignupSuccess = (code: string, name: string) => {
