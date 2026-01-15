@@ -120,7 +120,7 @@ function App() {
       console.warn('[App] Auth check taking too long, forcing completion');
       setIsCheckingAuth(false);
       setCurrentView('signup');
-    }, 5000);
+    }, 15000);
 
     try {
       const params = new URLSearchParams(window.location.search);
