@@ -81,70 +81,50 @@ export default function RestaurantDashboard({ onLogout }: RestaurantDashboardPro
 
   const loadRestaurantData = async () => {
     try {
-      console.log('[RestaurantDashboard] Starting loadRestaurantData...');
-
       const { data: { user } } = await supabase.auth.getUser();
-      console.log('[RestaurantDashboard] User:', user?.id);
-
       if (!user) {
-        console.error('[RestaurantDashboard] No user found');
         await supabase.auth.signOut();
         onLogout();
         return;
       }
 
-      console.log('[RestaurantDashboard] Fetching restaurant data...');
       const { data: restaurantData, error: restaurantError } = await supabase
         .from('restaurants')
         .select('*')
         .eq('auth_id', user.id)
         .maybeSingle();
 
-      console.log('[RestaurantDashboard] Restaurant data:', restaurantData, restaurantError);
-
       if (restaurantError) {
-        console.error('[RestaurantDashboard] Error loading restaurant:', restaurantError);
+        console.error('Error loading restaurant:', restaurantError);
         await supabase.auth.signOut();
         onLogout();
         return;
       }
 
       if (!restaurantData) {
-        console.error('[RestaurantDashboard] No restaurant found for this user');
+        console.error('No restaurant found for this user - access denied');
         await supabase.auth.signOut();
         onLogout();
         return;
       }
 
       setRestaurant(restaurantData);
-      console.log('[RestaurantDashboard] Restaurant set successfully');
 
-      console.log('[RestaurantDashboard] Fetching customers...');
       const { data: customersData, error: customersError } = await supabase
         .from('customers')
         .select('*')
         .eq('restaurant_id', restaurantData.id)
         .order('created_at', { ascending: false });
 
-      console.log('[RestaurantDashboard] Customers data:', customersData, customersError);
+      if (customersError) throw customersError;
 
-      if (customersError) {
-        console.error('[RestaurantDashboard] Error loading customers:', customersError);
-        throw customersError;
-      }
-
-      console.log('[RestaurantDashboard] Processing customer stamps...');
       const customersWithStamps = await Promise.all(
         (customersData || []).map(async (customer) => {
-          const { count, error: stampError } = await supabase
+          const { count } = await supabase
             .from('stamps')
             .select('*', { count: 'exact', head: true })
             .eq('customer_id', customer.id)
             .eq('restaurant_id', restaurantData.id);
-
-          if (stampError) {
-            console.error('[RestaurantDashboard] Error counting stamps for customer:', customer.id, stampError);
-          }
 
           return {
             ...customer,
@@ -154,9 +134,7 @@ export default function RestaurantDashboard({ onLogout }: RestaurantDashboardPro
       );
 
       setCustomers(customersWithStamps);
-      console.log('[RestaurantDashboard] Customers with stamps:', customersWithStamps);
 
-      console.log('[RestaurantDashboard] Fetching stats...');
       const { count: totalStamps } = await supabase
         .from('stamps')
         .select('*', { count: 'exact', head: true })
@@ -180,11 +158,9 @@ export default function RestaurantDashboard({ onLogout }: RestaurantDashboardPro
         redeemedCoupons: redeemedCoupons || 0,
       });
 
-      console.log('[RestaurantDashboard] All data loaded successfully');
     } catch (error) {
-      console.error('[RestaurantDashboard] Error loading restaurant data:', error);
+      console.error('Error loading restaurant data:', error);
     } finally {
-      console.log('[RestaurantDashboard] Setting isLoading to false');
       setIsLoading(false);
     }
   };
@@ -226,20 +202,14 @@ export default function RestaurantDashboard({ onLogout }: RestaurantDashboardPro
       const trimmedInput = customerIdInput.trim();
 
       if (/^\d{6}$/.test(trimmedInput)) {
-        console.log('[RestaurantDashboard] Looking up customer with code:', trimmedInput);
-        console.log('[RestaurantDashboard] Restaurant ID:', restaurant.id);
-
         const { data: customer, error } = await supabase
           .from('customers')
           .select('*')
           .eq('redemption_code', trimmedInput)
-          .eq('restaurant_id', restaurant.id)
           .maybeSingle();
 
-        console.log('[RestaurantDashboard] Customer lookup result:', customer, error);
-
         if (error || !customer) {
-          setStampError('Kunde mit diesem Code nicht gefunden oder gehört nicht zu Ihrem Restaurant');
+          setStampError('Kunde mit diesem Code nicht gefunden');
           return;
         }
 
@@ -293,57 +263,57 @@ export default function RestaurantDashboard({ onLogout }: RestaurantDashboardPro
 
     setAddingStamp(true);
     setStampError('');
-    setStampSuccess('');
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        setStampError('Nicht authentifiziert');
+      const { data: activeCard } = await supabase
+        .from('stamp_cards')
+        .select('id, current_stamps, program_id, program:stamp_programs(stamps_required, restaurant_id)')
+        .eq('customer_id', selectedCustomer.id)
+        .eq('status', 'active')
+        .eq('program.restaurant_id', restaurant.id)
+        .maybeSingle();
+
+      if (!activeCard) {
+        setStampError('Keine aktive Stempelkarte gefunden');
         setAddingStamp(false);
         return;
       }
 
-      const { data, error } = await supabase.rpc('add_stamp_to_customer', {
-        p_customer_id: selectedCustomer.id,
-        p_restaurant_auth_id: user.id,
-        p_notes: stampNote || null,
-      });
+      const { error: stampError } = await supabase
+        .from('stamps')
+        .insert({
+          card_id: activeCard.id,
+          customer_id: selectedCustomer.id,
+          restaurant_id: restaurant.id,
+          added_by_email: restaurant.email,
+          notes: stampNote,
+        });
 
-      if (error) {
-        console.error('Error calling add_stamp_to_customer:', error);
-        setStampError('Fehler beim Hinzufügen des Stempels');
-        setAddingStamp(false);
-        return;
-      }
+      if (stampError) throw stampError;
 
-      const result = data;
+      const newStampCount = activeCard.current_stamps + 1;
+      const { error: updateError } = await supabase
+        .from('stamp_cards')
+        .update({
+          current_stamps: newStampCount,
+          total_stamps_earned: newStampCount,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', activeCard.id);
 
-      if (!result.success) {
-        setStampError(result.error || 'Fehler beim Hinzufügen des Stempels');
-        setAddingStamp(false);
-        return;
-      }
+      if (updateError) throw updateError;
 
-      if (result.reward_issued) {
-        setStampSuccess(
-          `🎉 ${result.message}\n` +
-          `Gutschein-Code: ${result.coupon_code}\n` +
-          `Belohnung: ${result.reward_value}`
-        );
-      } else {
-        setStampSuccess(result.message);
-      }
-
+      setStampSuccess(`Stempel erfolgreich hinzugefügt! ${selectedCustomer.name} hat jetzt ${newStampCount} Stempel.`);
       setSelectedCustomer(null);
       setCustomerIdInput('');
       setStampNote('');
 
       await loadRestaurantData();
 
-      setTimeout(() => setStampSuccess(''), 5000);
+      setTimeout(() => setStampSuccess(''), 3000);
     } catch (err) {
-      console.error('Unexpected error adding stamp:', err);
-      setStampError('Ein unerwarteter Fehler ist aufgetreten');
+      console.error('Error adding stamp:', err);
+      setStampError('Fehler beim Hinzufügen des Stempels');
     } finally {
       setAddingStamp(false);
     }
