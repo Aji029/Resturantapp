@@ -81,50 +81,70 @@ export default function RestaurantDashboard({ onLogout }: RestaurantDashboardPro
 
   const loadRestaurantData = async () => {
     try {
+      console.log('[RestaurantDashboard] Starting loadRestaurantData...');
+
       const { data: { user } } = await supabase.auth.getUser();
+      console.log('[RestaurantDashboard] User:', user?.id);
+
       if (!user) {
+        console.error('[RestaurantDashboard] No user found');
         await supabase.auth.signOut();
         onLogout();
         return;
       }
 
+      console.log('[RestaurantDashboard] Fetching restaurant data...');
       const { data: restaurantData, error: restaurantError } = await supabase
         .from('restaurants')
         .select('*')
         .eq('auth_id', user.id)
         .maybeSingle();
 
+      console.log('[RestaurantDashboard] Restaurant data:', restaurantData, restaurantError);
+
       if (restaurantError) {
-        console.error('Error loading restaurant:', restaurantError);
+        console.error('[RestaurantDashboard] Error loading restaurant:', restaurantError);
         await supabase.auth.signOut();
         onLogout();
         return;
       }
 
       if (!restaurantData) {
-        console.error('No restaurant found for this user - access denied');
+        console.error('[RestaurantDashboard] No restaurant found for this user');
         await supabase.auth.signOut();
         onLogout();
         return;
       }
 
       setRestaurant(restaurantData);
+      console.log('[RestaurantDashboard] Restaurant set successfully');
 
+      console.log('[RestaurantDashboard] Fetching customers...');
       const { data: customersData, error: customersError } = await supabase
         .from('customers')
         .select('*')
         .eq('restaurant_id', restaurantData.id)
         .order('created_at', { ascending: false });
 
-      if (customersError) throw customersError;
+      console.log('[RestaurantDashboard] Customers data:', customersData, customersError);
 
+      if (customersError) {
+        console.error('[RestaurantDashboard] Error loading customers:', customersError);
+        throw customersError;
+      }
+
+      console.log('[RestaurantDashboard] Processing customer stamps...');
       const customersWithStamps = await Promise.all(
         (customersData || []).map(async (customer) => {
-          const { count } = await supabase
+          const { count, error: stampError } = await supabase
             .from('stamps')
             .select('*', { count: 'exact', head: true })
             .eq('customer_id', customer.id)
             .eq('restaurant_id', restaurantData.id);
+
+          if (stampError) {
+            console.error('[RestaurantDashboard] Error counting stamps for customer:', customer.id, stampError);
+          }
 
           return {
             ...customer,
@@ -134,7 +154,9 @@ export default function RestaurantDashboard({ onLogout }: RestaurantDashboardPro
       );
 
       setCustomers(customersWithStamps);
+      console.log('[RestaurantDashboard] Customers with stamps:', customersWithStamps);
 
+      console.log('[RestaurantDashboard] Fetching stats...');
       const { count: totalStamps } = await supabase
         .from('stamps')
         .select('*', { count: 'exact', head: true })
@@ -158,9 +180,11 @@ export default function RestaurantDashboard({ onLogout }: RestaurantDashboardPro
         redeemedCoupons: redeemedCoupons || 0,
       });
 
+      console.log('[RestaurantDashboard] All data loaded successfully');
     } catch (error) {
-      console.error('Error loading restaurant data:', error);
+      console.error('[RestaurantDashboard] Error loading restaurant data:', error);
     } finally {
+      console.log('[RestaurantDashboard] Setting isLoading to false');
       setIsLoading(false);
     }
   };
